@@ -1,7 +1,8 @@
+use std::fmt;
 use std::str;
 use std::str::FromStr;
 use std::iter::FromIterator;
-use nom::{is_alphabetic, is_alphanumeric, multispace, IResult, Needed};
+use nom::{is_alphabetic, is_alphanumeric, multispace, IResult, IError, Needed};
 
 macro_rules! named_attr(
     ($i:expr, $name:expr, $submac:ident!( $($args:tt)* )) => (
@@ -87,8 +88,10 @@ macro_rules! space_first(
     );
 );
 
+/// Matches "yes" or "no"
 named!(yes_no, alt!(tag!("yes") | tag!("no")));
 
+/// Matches `standalone="yes|no"`
 named!(
     sd_decl<bool>,
     map_opt!(
@@ -113,6 +116,7 @@ named!(
     )
 );
 
+/// Matches `encoding="…"`
 named!(
     enc_decl<String>,
     map_res!(
@@ -149,6 +153,7 @@ named!(
 
 named!(version_num, take_while1_s!(is_version_num));
 
+/// Matches `version="…"`
 named!(
     version_decl<String>,
     map_res!(
@@ -157,6 +162,7 @@ named!(
     )
 );
 
+/// Used to store the XML declaration `<?xml … ?>`
 #[derive(Debug, PartialEq)]
 struct XMLDecl {
     version: String,
@@ -164,6 +170,7 @@ struct XMLDecl {
     standalone: bool,
 }
 
+/// Matches `<?xml version="…" encoding="…" standalone="…" ?>` to a XMLDecl structure
 named!(
     xml_decl<XMLDecl>,
     delimited!(
@@ -182,9 +189,11 @@ named!(
     )
 );
 
+/// Store a comment
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Comment(pub String);
 
+/// Matches `<!-- … -->`
 named!(
     comment<Comment>,
     map_res!(
@@ -193,7 +202,7 @@ named!(
     )
 );
 
-named!(prolog_misc<Vec<Comment>>, ws!(many0!(ws!(comment))));
+named!(comment_list<Vec<Comment>>, ws!(many0!(ws!(comment))));
 
 #[derive(Debug, PartialEq)]
 struct XMLProlog {
@@ -205,20 +214,25 @@ struct XMLProlog {
 named!(
     xml_prolog<XMLProlog>,
     do_parse!(
-        decl: opt!(xml_decl) >> comments1: prolog_misc >> doctype: ws!(opt!(doctype_decl))
-            >> comments2: prolog_misc >> (XMLProlog {
+        decl: opt!(xml_decl) >>
+        comments_before: comment_list >>
+        doctype: ws!(opt!(doctype_decl)) >>
+        comments_after: comment_list >>
+        (XMLProlog {
             decl,
             doctype,
-            comments: [&comments1[..], &comments2[..]].concat(),
+            comments: [comments_before, comments_after].concat(),
         })
     )
 );
 
+/// Store the DOCTYPE
 #[derive(Debug, PartialEq)]
 struct Doctype {
     name: String,
 }
 
+/// Matches `<!DOCTYPE …>`
 named!(
     doctype_decl<Doctype>,
     delimited!(
@@ -228,12 +242,23 @@ named!(
     )
 );
 
+/// Store a node attribute
 #[derive(Debug, PartialEq)]
 pub struct Attribute {
     pub name: String,
     pub value: String,
 }
 
+impl Attribute {
+    fn pretty_print(&self, f: &mut fmt::Formatter, depth: usize) -> fmt::Result {
+        write!(f, "{0:1$}", "", depth * 2)?;
+        let mut value = self.value.clone();
+        value.truncate(40);
+        writeln!(f, "Attribute: {} = {}", self.name, value)
+    }
+}
+
+/// Matches `key="value"`
 named!(
     attribute<Attribute>,
     map_res!(
@@ -254,6 +279,23 @@ pub enum Content {
     Chars(String),
 }
 
+impl Content {
+    fn pretty_print(&self, f: &mut fmt::Formatter, depth: usize) -> fmt::Result {
+        match self {
+            &Content::Comment(ref c) => {
+                writeln!(f, "{0:1$}{2:?}", "", depth * 2, c)
+            }
+            &Content::Element(ref e) => e.pretty_print(f, depth),
+            &Content::Chars(ref s) => {
+                let mut content = s.clone();
+                content.truncate(40);
+                writeln!(f, "{0:1$}{2}", "", depth * 2, content)
+            }
+        }
+    }
+}
+
+/// A Node
 #[derive(Debug, PartialEq)]
 pub struct Element {
     pub name: String,
@@ -261,11 +303,27 @@ pub struct Element {
     pub children: Vec<Content>,
 }
 
+impl Element {
+    fn pretty_print(&self, f: &mut fmt::Formatter, depth: usize) -> fmt::Result {
+        writeln!(f, "{0:1$}Element: {2}", "", depth * 2, self.name)?;
+        let depth = depth + 1;
+        for attr in &self.attributes {
+            attr.pretty_print(f, depth)?;
+        }
+        for child in &self.children {
+            child.pretty_print(f, depth)?;
+        }
+        Ok(())
+    }
+}
+
+/// Matches a node (empty tag or tag pair)
 named!(
     element<Element>,
     preceded!(peek!(not!(tag!("</"))), alt!(empty_elem_tag | tag_pair))
 );
 
+/// Matches a node's content (child node, string or comment)
 named!(
     content<Content>,
     alt!(
@@ -274,6 +332,7 @@ named!(
     )
 );
 
+/// Matches `<tag attr="value" />`
 named!(
     empty_elem_tag<Element>,
     do_parse!(
@@ -286,6 +345,7 @@ named!(
     )
 );
 
+/// Matches `<tag attr="value">…</tag>`
 named!(
     tag_pair<Element>,
     do_parse!(
@@ -300,6 +360,7 @@ named!(
     )
 );
 
+/// Matches `<![CDATA[ … ]]>`
 named!(
     cdata<String>,
     map_res!(
@@ -313,6 +374,7 @@ named!(
 
 named!(char_data<char>, none_of!("<&"));
 
+/// Matches entity references, like `&amp;`
 named!(
     entity_ref<char>,
     delimited!(
@@ -325,6 +387,7 @@ named!(
     )
 );
 
+/// Matches a node value (with entity refs converted)
 named!(
     node_value<String>,
     map!(ws!(many1!(alt!(char_data | entity_ref))), String::from_iter)
@@ -337,12 +400,31 @@ pub struct XMLDoc {
     misc: Vec<Comment>,
 }
 
+impl XMLDoc {
+    pub fn parse(doc: &str) -> Result<Self, IError<u32>> {
+        xml_doc(doc.as_bytes()).to_full_result()
+    }
+}
+
+impl fmt::Display for XMLDoc {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "{:?}", self.prolog)?;
+        self.root.pretty_print(f, 0)?;
+
+        for comment in &self.misc {
+            writeln!(f, "{:?}", comment)?;
+        }
+
+        Ok(())
+    }
+}
+
 named!(
     pub xml_doc<XMLDoc>,
     do_parse!(
         prolog: xml_prolog >>
         root: element >>
-        misc: ws!(prolog_misc) >>
+        misc: ws!(comment_list) >>
         (XMLDoc { prolog, root, misc })
     )
 );
