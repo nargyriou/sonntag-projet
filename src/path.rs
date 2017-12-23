@@ -3,12 +3,26 @@ use std::str::FromStr;
 use std::fmt;
 use nom::{is_digit, space, IError};
 
-#[derive(Debug, PartialEq, Clone)]
-struct Point(f32, f32);
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub struct Point(pub f32, pub f32);
 
 impl fmt::Display for Point {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "({}, {})", self.0, self.1)
+    }
+}
+
+impl Point {
+    fn relative(self, to: Point) -> Point {
+        Point(self.0 + to.0, self.1 + to.1)
+    }
+
+    fn adjust(self, cmd_type: CommandType, start: Point) -> Point {
+        if cmd_type.is_relative() {
+            self.relative(start)
+        } else {
+            self
+        }
     }
 }
 
@@ -19,6 +33,27 @@ struct MoveTo {
     commands: Vec<DrawTo>,
 }
 
+fn bezier(p1: Point, p2: Point, ctrl1: Point, ctrl2: Point, precision: usize) -> Vec<Point> {
+    let mut path = Vec::with_capacity(precision - 1);
+    let step = 1. / (precision as f32);
+    for i in 1..precision {
+        let t = (i as f32) * step;
+
+        let x = (1. - t).powi(3) * p1.0 
+            + 3. * (1. - t).powi(2) * t * ctrl1.0
+            + 3. * (1. - t) * t.powi(2) * ctrl2.0
+            + t.powi(3) * p2.0;
+
+        let y = (1. - t).powi(3) * p1.1 
+            + 3. * (1. - t).powi(2) * t * ctrl1.1
+            + 3. * (1. - t) * t.powi(2) * ctrl2.1
+            + t.powi(3) * p2.1;
+
+        path.push(Point(x, y));
+    }
+    path
+}
+
 impl MoveTo {
     fn pretty_print(&self, f: &mut fmt::Formatter, depth: usize) -> fmt::Result {
         writeln!(f, "{0:1$}MoveTo {2}", "", depth * 2, self.start)?;
@@ -27,6 +62,63 @@ impl MoveTo {
             writeln!(f, "{0:1$}{2:?}", "", depth * 2, command)?;
         }
         Ok(())
+    }
+
+    fn draw(&self, start: Point) -> (Point, Polygon) {
+        let start = start.adjust(self.cmd_type, start);
+        let mut points = vec![start];
+        let mut current = start;
+
+        for command in &self.commands {
+            match *command {
+                DrawTo::LineTo(cmd_type, p) => {
+                    let p = p.adjust(cmd_type, current);
+                    points.push(p);
+                    current = p;
+                }
+                DrawTo::ClosePath => {
+                    points.push(start);
+                    current = start;
+                }
+                DrawTo::CurveTo(cmd_type, ctrl1, ctrl2, p2) => {
+                    let p1 = current;
+                    let p2 = p2.adjust(cmd_type, current);
+                    let ctrl1 = ctrl1.adjust(cmd_type, current);
+                    let ctrl2 = ctrl2.adjust(cmd_type, current);
+
+                    let curve = bezier(p1, p2, ctrl1, ctrl2, 10);
+                    points.extend(curve);
+
+                    points.push(p2);
+                    current = p2;
+                }
+            }
+        }
+
+        let polygon = Polygon::from(points);
+
+        (current, polygon)
+    }
+}
+
+#[derive(Debug)]
+pub struct Polygon {
+    pub closed: bool,
+    pub points: Vec<Point>
+}
+
+impl Polygon {
+    fn from(mut points: Vec<Point>) -> Self {
+        let closed = points.first() == points.last();
+
+        if closed {
+            points.pop();
+        }
+
+        Polygon {
+            closed,
+            points
+        }
     }
 }
 
@@ -43,7 +135,21 @@ impl Path {
         for ref child in &self.0 {
             child.pretty_print(f, depth + 1)?;
         }
-        Ok(())
+
+        writeln!(f, "{:?}", self.draw())
+    }
+
+    pub fn draw(&self) -> Vec<Polygon> {
+        let mut start = Point(0., 0.);
+        let mut polygons = vec![];
+
+        for path in &self.0 {
+            let (next, polygon) = path.draw(start);
+            start = next;
+            polygons.push(polygon);
+        }
+
+        polygons
     }
 }
 
@@ -57,6 +163,12 @@ impl fmt::Display for Path {
 enum CommandType {
     Relative,
     Absolute
+}
+
+impl CommandType {
+    fn is_relative(self) -> bool {
+        self == CommandType::Relative
+    }
 }
 
 macro_rules! cmd (
