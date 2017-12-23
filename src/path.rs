@@ -1,6 +1,7 @@
 use std::str;
 use std::str::FromStr;
 use std::fmt;
+use std::f32;
 use nom::{is_digit, space, IError};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -13,16 +14,30 @@ impl fmt::Display for Point {
 }
 
 impl Point {
-    fn relative(self, to: Point) -> Point {
+    fn translate(self, to: Point) -> Point {
         Point(self.0 + to.0, self.1 + to.1)
     }
 
     fn adjust(self, cmd_type: CommandType, start: Point) -> Point {
         if cmd_type.is_relative() {
-            self.relative(start)
+            self.translate(start)
         } else {
             self
         }
+    }
+
+    fn min(self, other: Point) -> Point {
+        Point(
+            f32::min(self.0, other.0), 
+            f32::min(self.1, other.1)
+        )
+    }
+
+    fn max(self, other: Point) -> Point {
+        Point(
+            f32::max(self.0, other.0), 
+            f32::max(self.1, other.1)
+        )
     }
 }
 
@@ -101,6 +116,45 @@ impl MoveTo {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct BoundingBox(Point, Point);
+
+pub trait Bounding {
+    fn bounding(&self) -> BoundingBox;
+}
+
+impl Bounding for BoundingBox {
+    fn bounding(&self) -> BoundingBox {
+        self.clone()
+    }
+}
+
+impl<T: Bounding> Bounding for (T, T) {
+    fn bounding(&self) -> BoundingBox {
+        let b1 = self.0.bounding();
+        let b2 = self.1.bounding();
+        BoundingBox(
+            b1.0.min(b2.0),
+            b1.1.max(b2.1),
+        )
+    }
+}
+
+impl<T: Bounding> Bounding for Vec<T> {
+    fn bounding(&self) -> BoundingBox {
+        let mut bounding = BoundingBox(
+            Point(f32::MAX, f32::MAX),
+            Point(f32::MIN, f32::MIN),
+        );
+
+        for boxes in self {
+            bounding = (bounding, boxes.bounding()).bounding();
+        }
+
+        bounding
+    }
+}
+
 #[derive(Debug)]
 pub struct Polygon {
     pub closed: bool,
@@ -119,6 +173,24 @@ impl Polygon {
             closed,
             points
         }
+    }
+
+    pub fn translate(&mut self, dx: f32, dy: f32) {
+        for point in &mut self.points {
+            *point = point.translate(Point(dx, dy));
+        }
+    }
+}
+
+impl Bounding for Polygon {
+    fn bounding(&self) -> BoundingBox {
+        let mut min = Point(f32::MAX, f32::MAX);
+        let mut max = Point(f32::MIN, f32::MIN);
+        for point in &self.points {
+            min = min.min(*point);
+            max = max.max(*point);
+        }
+        BoundingBox(min, max)
     }
 }
 
@@ -185,7 +257,7 @@ enum DrawTo {
 }
 
 named!(
-    comma_wsp<()>,
+    pub comma_wsp<()>,
     value!(
         (),
         preceded!(
