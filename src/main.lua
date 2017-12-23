@@ -1,4 +1,5 @@
 io.stdout:setvbuf("no")
+local parser    = require "parser"
 local Point     = require "point"
 local Line      = require "line"
 local Rectangle = require "rectangle"
@@ -42,35 +43,27 @@ local function generate()
 	return sorter
 end
 
-function love.load()
+function love.load(args)
 	math.randomseed(os.time())
 	love.window.setMode(900, 900, {vsync=false, centered=true})
 	love.graphics.setBackgroundColor(white)
 	love.graphics.setLineWidth(0.5)
-	if true then
-		p1 = Point(27.50, 25)
-		p2 = Point(27.50, 125)
-		p3 = Point(177.5, 25)
-		p4 = Point(177.5, 75)
-		p5 = Point(77.50, 75)
-		p6 = Point(77.50, 125)
-		seg1 = Line(p1, p2)
-		seg2 = Line(p2, p6)
-		seg3 = Line(p6, p5)
-		seg4 = Line(p5, p4)
-		seg5 = Line(p4, p3)
-		seg6 = Line(p3, p1)
-		p7 = Point(120.0*5, 30.0*5)
-		p8 = Point(110.0*5, 10.0*5)
-		p9 = Point(130.0*5, 10.0*5)
-		seg7 = Line(p7, p8)
-		seg8 = Line(p7, p9)
-		seg9 = Line(p8, p9)
-		poly = Polygon(100, 100, 200, 100, 150, 200)
 
-		r1 = Rectangle(400, 400, 200, 100)
-		r2 = Rectangle(50, 400, 150, 100)
-	end
+    if args[2] then
+        sorter = Sorter:new()
+        toggle = 1
+        local file = assert(io.open(args[2], "r"))
+        local svg = file:read("*all")
+        
+        local rects = parser:get_bounding_rects(svg)
+
+        for _, rect in pairs(rects) do
+            local shape = Movable(rect)
+            shape.color = {255, 0, 0}
+            print(shape.x, shape.y, shape.height, shape.width)
+            sorter:addShape(shape)
+        end
+    end
 
 	return true
 end
@@ -121,14 +114,6 @@ function love.draw()
 			love.graphics.setColor(v.color)
 			v:draw()
 		end
-	end
-
-	if r1:collide(r2) and not bascule then
-		print("collision")
-		bascule = true
-	elseif not r1:collide(r2) and bascule then
-		print("pas collision")
-		bascule = false
 	end
 end
 
