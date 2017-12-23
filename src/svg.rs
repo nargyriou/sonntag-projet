@@ -1,4 +1,5 @@
 use parser::{Content, Element, XMLDoc};
+use path::Path;
 use std::fmt;
 
 #[derive(Debug)]
@@ -16,7 +17,7 @@ impl fmt::Display for Root {
 
 #[derive(Debug)]
 pub enum Node {
-    Path(String),
+    Path(Path),
     Group(Vec<Node>),
 }
 
@@ -49,24 +50,22 @@ impl Node {
                     .find(|a| a.name.as_str() == "d")
                     .map(|a| a.value)
                     .unwrap_or(String::new());
-                Some(Node::Path(attr))
+                Some(Node::Path(Path::parse(attr.as_str()).ok()?))
             }
             _ => None,
         }
     }
 
     pub fn pretty_print(&self, f: &mut fmt::Formatter, depth: usize) -> fmt::Result {
-        write!(f, "{0:1$}", "", depth * 2)?;
         match self {
-            &Node::Path(ref path) => writeln!(f, "Path   {}…", &path[..40])?,
+            &Node::Path(ref path) => path.pretty_print(f, depth),
             &Node::Group(ref children) => {
-                writeln!(f, "Group")?;
+                writeln!(f, "{0:1$}Group", "", depth * 2)?;
                 for child in children {
                     child.pretty_print(f, depth + 1)?
                 }
+                Ok(())
             }
         }
-
-        Ok(())
     }
 }

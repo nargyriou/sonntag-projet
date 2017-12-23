@@ -11,6 +11,7 @@ use std::os::raw::c_char;
 
 pub use parser::XMLDoc;
 pub use svg::Node;
+pub use path::Path;
 
 #[no_mangle]
 pub fn pretty_print(ptr: *const c_char) {
