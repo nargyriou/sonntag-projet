@@ -6,6 +6,24 @@ use std::fmt;
 #[derive(Debug)]
 pub struct Root(Vec<Node>);
 
+impl Root {
+    pub fn get_rects(&self) -> Vec<[f32; 4]> {
+        let root = if self.0.len() == 1 {
+            if let Node::Group(ref children) = self.0[0] {
+                children
+            } else {
+                &self.0
+            }
+        } else {
+            &self.0
+        };
+
+        root.iter()
+            .map(|child| child.bounding().to_rect())
+            .collect()
+    }
+}
+
 impl fmt::Display for Root {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "Root")?;
@@ -16,7 +34,7 @@ impl fmt::Display for Root {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Node {
     Path(Vec<Polygon>),
     Group(Vec<Node>),

@@ -119,6 +119,15 @@ impl MoveTo {
 #[derive(Debug, Clone)]
 pub struct BoundingBox(Point, Point);
 
+impl BoundingBox {
+    pub fn to_rect(&self) -> [f32; 4] {
+        let (p1, p2) = (self.0, self.1);
+        let (x, y) = (p1.0, p1.1);
+        let (h, w) = (p2.0 - p1.0, p2.1 - p1.1);
+        [x, y, h, w]
+    }
+}
+
 pub trait Bounding {
     fn bounding(&self) -> BoundingBox;
 }
@@ -155,7 +164,7 @@ impl<T: Bounding> Bounding for Vec<T> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Polygon {
     pub closed: bool,
     pub points: Vec<Point>
