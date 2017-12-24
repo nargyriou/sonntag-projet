@@ -1,4 +1,6 @@
 io.stdout:setvbuf("no")
+love.filesystem.setRequirePath("src/?.lua;src/?/init.lua")
+
 local parser    = require "parser"
 local Point     = require "point"
 local Line      = require "line"
@@ -19,10 +21,10 @@ function type(var)
 	end
 end
 
-local function generate()
+local function generateRectangles(n)
 	local maxx, maxy = love.graphics.getDimensions()
 	local sorter = Sorter()
-	for i=1, 100 do
+	for i=1, n do
 		local width  = math.random(20, maxx*0.10)
 		local height = math.random(0.2, 1)*width
 		if math.random(1,10) > 5 then
@@ -43,29 +45,32 @@ local function generate()
 	return sorter
 end
 
+local function fetchSVG(file)
+	local sorter = Sorter()
+	local file = assert(io.open(file, "r"))
+	local svg = file:read("*all")
+	
+	local rects = parser:parse(svg)
+
+	for _, rect in pairs(rects) do
+		local shape = Movable(rect)
+		shape.color = {255, 0, 0}
+		sorter:addShape(shape)
+	end
+
+	return sorter
+end
+
 function love.load(args)
 	math.randomseed(os.time())
 	love.window.setMode(900, 900, {vsync=false, centered=true})
 	love.graphics.setBackgroundColor(white)
 	love.graphics.setLineWidth(0.5)
 
-    if args[2] then
-        sorter = Sorter:new()
-        toggle = 1
-        local file = assert(io.open(args[2], "r"))
-        local svg = file:read("*all")
-        
-        local rects = parser:parse(svg)
-
-        for _, rect in pairs(rects) do
-            local shape = Movable(rect)
-            shape.color = {255, 0, 0}
-            print(shape.x, shape.y, shape.height, shape.width)
-            sorter:addShape(shape)
-        end
-    end
-
-	return true
+	args[2] = args[2] or "svg/dessin_tetris1.svg"
+	if args[2] then
+		sorter = fetchSVG(args[2])
+	end
 end
 
 function love.update(dt)
@@ -74,41 +79,13 @@ function love.update(dt)
 			v:updatePos(dt)
 		end
 	end
-
-	for i,key in pairs({"down", "up", "left", "right"}) do
-		if love.keyboard.isDown(key) then
-			-- si objet contient une méthode du nom de la clé
-			if type(r1[key]) == "function" then
-				-- on l'appelle. 
-				-- code équivalent à `r1:key(speed*dt)`
-				r1[key](r1, 500*dt)
-			end
-		end
-	end
 end
 
 local bascule
 function love.draw()
-	if false then
-			love.graphics.setColor(black)
-			seg1:draw()
-			seg2:draw()
-			seg3:draw()
-			seg4:draw()
-			seg5:draw()
-			seg6:draw()
-			seg7:draw()
-			seg8:draw()
-			seg9:draw()
-			poly:draw()
-
-			r1:draw()
-			r2:draw()
-	end
-
 	local height = love.graphics.getHeight()
-	love.graphics.translate(0, height)
-	love.graphics.rotate(-math.pi/2)
+	-- love.graphics.translate(0, height)
+	-- love.graphics.rotate(-math.pi/2)
 	if sorter then
 		for i,v in pairs(sorter.shapes) do
 			love.graphics.setColor(v.color)
@@ -118,19 +95,35 @@ function love.draw()
 end
 
 function love.keypressed(key, scancode, isrepeat)
-	if key == "space" then
-		if not toggle or toggle == 0 then
-			sorter = generate()
-			toggle = 1
-		elseif toggle == 1 then
-			sorter:sort()
-			toggle = 2
-		elseif toggle == 2 then
+	local dessins = {
+		"svg/dessin_complex.svg", "svg/dessin_complex2.svg", "svg/dessin_grp.svg", 
+		"svg/dessin_simple.svg", "svg/dessin_tetris1.svg", "svg/dessin_tetris2.svg"
+	}
+
+	if key == "return" then
+		dessin = dessin or -1
+
+		if dessin%2 == 1 then
 			sorter:compact()
-			toggle = 0
+		else
+			local tmp = (math.floor(dessin/2) % #dessins) + 1
+			local file = dessins[tmp]
+			print(tmp, file)
+			sorter = fetchSVG(file)
 		end
-	elseif key == "k" then
-		local v = sorter:findBottomLeft()
-		v.color = v.color == black and red or black
+
+		dessin = dessin + 1
+	elseif key == "space" then
+		cycle = cycle or 1
+
+		if cycle%3 == 1 then
+			sorter = generateRectangles(100)
+		elseif cycle%3 == 2 then
+			sorter:sort()
+		else
+			sorter:compact()
+		end
+
+		cycle = cycle + 1
 	end
 end

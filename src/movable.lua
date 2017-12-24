@@ -29,17 +29,14 @@ function Movable:getArea()
 end
 
 function Movable:draw()
-	self.shape.x = self.x
-	self.shape.y = self.y
 	return self.shape:draw()
 end
 
 function Movable:move(x, y)
 	self.x = x
 	self.y = y
-	self.newx = x
-	self.newy = y
-	return self.shape:move(x, y)
+	self.shape:move(x, y)
+	self.travelling = false
 end
 
 function Movable:moveTo(x, y, duration)
@@ -57,6 +54,9 @@ function Movable:collide(...)
 end
 
 function Movable:updatePos(dt)
+	if not self.travelling then
+		return
+	end
 	if self.timeElapsed >= self.duration then
 		self.travelling = false
 		return
@@ -66,8 +66,9 @@ function Movable:updatePos(dt)
 
 	local movx = (self.newx - self.oldx) * self.tween(self.completion)
 	local movy = (self.newy - self.oldy) * self.tween(self.completion)
-	self.x = self.oldx + movx
-	self.y = self.oldy + movy
+
+	self:move(self.oldx + movx, self.oldy + movy)
+	self.travelling = true
 end
 
 return Movable

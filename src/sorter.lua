@@ -84,7 +84,7 @@ local function findBottomRight(sorted)
 	local height = love.graphics.getHeight()
 	local width  = love.graphics.getWidth()
 	for i,v in pairs(sorted) do
-		local add = v.newx + v.newy
+		local add = v.x + v.y
 		if add > max then
 			match = v
 			max = add
@@ -99,7 +99,7 @@ local function findBottomLeft(sorted)
 	local height = love.graphics.getHeight()
 	local width  = love.graphics.getWidth()
 	for i,v in pairs(sorted) do
-		local add = -v.newx + v.newy
+		local add = -v.x + v.y
 		if add > max then
 			match = v
 			max = add
@@ -111,8 +111,8 @@ end
 local function findSpotNextTo(neighbor, shape)
 	local width, height = love.graphics.getDimensions()
 	
-	if neighbor.newx + neighbor.width + shape.width < width then
-		return (neighbor.newx + neighbor.width), neighbor.newy
+	if neighbor.x + neighbor.width + shape.width < width then
+		return (neighbor.x + neighbor.width + 1), neighbor.y
 	else
 		return nil
 	end
@@ -120,29 +120,30 @@ end
 local function findSpotAbove(neighbor, shape)
 	local width, height = love.graphics.getDimensions()
 	
-	if neighbor.newy - neighbor.height - shape.height > 0 then
-		return neighbor.newx, neighbor.newy - neighbor.height - shape.height
+	if neighbor.y - neighbor.height - shape.height > 0 then
+		return neighbor.x, neighbor.y - neighbor.height - shape.height - 1
 	else
 		return nil
 	end
 end
 
 local function findSpotUnder(neighbor, shape)
-	return neighbor.newx, (neighbor.newy + neighbor.height)
+	return neighbor.x, (neighbor.y + neighbor.height + 1)
 end
 
 local function findSpot(sorted, shape)
 	local width, height = love.graphics.getDimensions()
-	local neighbor = findBottomRight(sorted)
 	local strategies = {findSpotAbove, findSpotNextTo, findSpotUnder}
 	local x, y
+	-- Trois fonctions appliquées
 	for j=1, #strategies do
 		local f = strategies[j]
-
+		-- A toutes les formes déjà triées
 		for i=1, #sorted do
 			local v = sorted[i]
 			x, y = f(v, shape)
 			if x and y then 
+				-- Détection de collision des sur les formes proches
 				if not shape:collide(sorted, x, y) then
 					return x, y 
 				end
@@ -158,8 +159,9 @@ function Sorter:compact()
 	objectQuicksort(self.shapes, "getArea")
 	
 	local sorted = {}
-	self.shapes[#self.shapes]:move(0, 0)
-	table.insert(sorted, self.shapes[#self.shapes])
+	local biggest = self.shapes[#self.shapes]
+	biggest:move(0, 0)
+	table.insert(sorted, biggest)
 
 	for i=#self.shapes-1, 1, -1 do
 		local shape = self.shapes[i]

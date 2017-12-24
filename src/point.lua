@@ -13,6 +13,15 @@ function Point:new(x, y)
 	end
 end
 
+function Point:add(x, y)
+	self:move(self.x + x, self.y + y)
+end
+
+function Point:move(x, y)
+	self.x = x
+	self.y = y
+end
+
 function Point:explode()
 	return x, y
 end
