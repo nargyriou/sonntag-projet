@@ -1,6 +1,5 @@
-use nom::float;
 use parser::{Content, Element, XMLDoc};
-use path::{comma_wsp, Bounding, BoundingBox, Path, Polygon};
+use path::{comma_wsp, number, Bounding, BoundingBox, Path, Polygon};
 use std::fmt;
 
 #[derive(Debug)]
@@ -42,7 +41,7 @@ named!(
     parse_translate<(f32, f32)>,
     delimited!(
         tag!("translate("),
-        separated_pair!(float, comma_wsp, float),
+        separated_pair!(number, comma_wsp, number),
         tag!(")")
     )
 );

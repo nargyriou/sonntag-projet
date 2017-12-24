@@ -80,7 +80,7 @@ impl MoveTo {
     }
 
     fn draw(&self, start: Point) -> (Point, Polygon) {
-        let start = start.adjust(self.cmd_type, start);
+        let start = self.start.adjust(self.cmd_type, start);
         let mut points = vec![start];
         let mut current = start;
 
@@ -277,7 +277,7 @@ named!(
 );
 
 named!(
-    number<f32>,
+    pub number<f32>,
     map_opt!(
         take_while1!(|c| is_digit(c) || (c as char) == '.' || (c as char) == '-'
             || (c as char) == 'e'),
@@ -344,8 +344,8 @@ named!(
 named!(coordinate_list<Vec<Point>>, many0!(ws!(coordinate_pair)));
 
 named!(
-    closepath<DrawTo>,
-    value!(DrawTo::ClosePath, alt!(char!('z') | char!('Z')))
+    closepath<Vec<DrawTo>>,
+    value!(vec![DrawTo::ClosePath], alt!(char!('z') | char!('Z')))
 );
 
 named!(
@@ -358,7 +358,7 @@ named!(
 
 named!(
     drawto_command<Vec<DrawTo>>,
-    alt!(map!(closepath, |v| vec![v]) | lineto | curveto)
+    alt!(closepath | lineto | curveto)
 );
 
 named!(
