@@ -13,11 +13,30 @@ end
 
 ffi.cdef[[
 typedef struct {
-  uint32_t size;
-  float (*ptr)[4];
-} Rects;
+  float x;
+  float y;
+} Point;
 
-Rects get_bounding_rects(const char *ptr);
+typedef struct {
+  uint32_t size;
+  const Point *vertices;
+} Polygon;
+
+typedef struct {
+  float x;
+  float y;
+  float h;
+  float w;
+  uint32_t size;
+  const Polygon *polygons;
+} Group;
+
+typedef struct {
+  uint32_t size;
+  const Group *groups;
+} Drawing;
+
+Drawing parse(const char* input);
 
 void pretty_print(const char* input);
 ]]
@@ -25,24 +44,27 @@ void pretty_print(const char* input);
 local lib = ffi.load('target/debug/libelayr.' .. ext)
 Parser.pretty_print = lib.pretty_print
 
-function Parser:get_bounding_rects(input)
-  local struct = lib.get_bounding_rects(input)
+function Parser:parse(input)
+  local struct = lib.parse(input)
 
-  local rects = {}
+  print(struct.size)
 
-  for i=0,struct.size do
-    local rect = struct.ptr[i - 1]
-    table.insert(rects, Rectangle(
-        rect[0] / 5 + 300, -- x
-        rect[1] / 5 + 300, -- y
-        rect[2] / 5, -- height
-        rect[3] / 5 -- width
-    ))
+  for i=0,struct.size-1 do
+    local group = struct.groups[i]
+    print("Group", group.x, group.y, group.h, group.w)
+
+    for j=0,group.size-1 do
+      local polygon = group.polygons[j]
+      print("  Polygon", polygon.size)
+      
+      for k=0,polygon.size-1 do
+        local vertice = polygon.vertices[k]
+        print("    ", vertice.x, vertice.y)
+      end
+    end
   end
 
-  -- ffi.C.free(struct.ptr)
-
-  return rects
+  return {}
 end
 
 return Parser

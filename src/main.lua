@@ -55,7 +55,7 @@ function love.load(args)
         local file = assert(io.open(args[2], "r"))
         local svg = file:read("*all")
         
-        local rects = parser:get_bounding_rects(svg)
+        local rects = parser:parse(svg)
 
         for _, rect in pairs(rects) do
             local shape = Movable(rect)

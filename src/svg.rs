@@ -7,7 +7,7 @@ use std::fmt;
 pub struct Root(Vec<Node>);
 
 impl Root {
-    pub fn get_rects(&self) -> Vec<[f32; 4]> {
+    pub fn simplify(&self) -> Vec<Vec<Polygon>> {
         let root = if self.0.len() == 1 {
             if let Node::Group(ref children) = self.0[0] {
                 children
@@ -18,9 +18,7 @@ impl Root {
             &self.0
         };
 
-        root.iter()
-            .map(|child| child.bounding().to_rect())
-            .collect()
+        root.iter().map(|child| child.clone().simplify()).collect()
     }
 }
 
@@ -121,6 +119,13 @@ impl Node {
         }
 
         Some(node)
+    }
+
+    fn simplify(self) -> Vec<Polygon> {
+        match self {
+            Node::Path(polygons) => polygons,
+            Node::Group(nodes) => nodes.into_iter().flat_map(|node| node.simplify()).collect(),
+        }
     }
 
     pub fn pretty_print(&self, f: &mut fmt::Formatter, depth: usize) -> fmt::Result {

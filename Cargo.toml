@@ -9,9 +9,6 @@ authors = [
 [lib]
 crate-type = ["rlib", "dylib"]
 
-[dependencies]
-utf8-ranges = "1.0.0"
-
 [dependencies.nom]
 version = "^3.2"
 features = ["nightly"]
