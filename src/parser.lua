@@ -4,13 +4,13 @@ local Polygon   = require 'polygon'
 
 local Parser = {}
 
-local ext
+local file
 if ffi.os == 'Windows' then
-	ext = 'dll'
+	file = 'elayr.dll'
 elseif ffi.os == 'Linux' then
-	ext = "so"
+	file = 'libelayr.so'
 else
-	ext = 'dylib'
+	file = 'libelayr.dylib'
 end
 
 ffi.cdef[[
@@ -43,7 +43,7 @@ Drawing parse(const char* input);
 void pretty_print(const char* input);
 ]]
 
-local lib = ffi.load('target/debug/libelayr.' .. ext)
+local lib = ffi.load('target/release/' .. file)
 Parser.pretty_print = lib.pretty_print
 
 function Parser:parse(input)
